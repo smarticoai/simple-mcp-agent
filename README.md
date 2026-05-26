@@ -78,11 +78,11 @@ Example session:
 
 ```
 You: create segment of users from Japan
-Agent: [calls search_properties → get_properties_by_names → segment_create dry_run]
+Agent: [calls list_entities → describe_entity(segment) → search_properties → get_properties_by_names → entity_create(entity_type=segment, dry_run=true)]
        Here is the preview. Would you like to create it?
 
 You: yes
-Agent: [calls segment_create dry_run:false]
+Agent: [calls entity_create(entity_type=segment, dry_run=false)]
        Segment created. View it here: https://...
 ```
 
