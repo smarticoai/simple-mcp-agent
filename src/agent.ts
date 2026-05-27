@@ -1,40 +1,21 @@
 import {
-Content,
-FunctionCall,
-FunctionDeclaration,
-FunctionDeclarationSchema,
-GenerativeModel,
-GoogleGenerativeAI,
-Tool,
-} from '@google/generative-ai';
+	GoogleGenAI,
+	Content,
+	FunctionCall,
+	FunctionDeclaration,
+	Tool,
+} from '@google/genai';
 import type { Tool as MCPTool } from '@modelcontextprotocol/sdk/types.js';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { callMCPTool } from './mcp-client';
 
 const MAX_ITERATIONS = 10;
 
-/**
- * Strips JSON Schema meta-fields that Gemini's API does not accept.
- * MCP tool schemas often include `$schema` and `additionalProperties` which
- * are valid JSON Schema but cause a 400 from the Gemini function-calling API.
- */
-function sanitizeSchemaForGemini(schema: Record<string, unknown>): Record<string, unknown> {
-	const { $schema, additionalProperties, ...rest } = schema;
-	return rest;
-}
-
-/**
- * Converts MCP tool descriptors into Gemini FunctionDeclaration objects.
- * MCP tools carry a JSON Schema under `inputSchema`; Gemini expects the same
- * shape under `parameters` but rejects extra meta-fields like `$schema`.
- */
 function mcpToolsToGeminiFunctions(mcpTools: MCPTool[]): FunctionDeclaration[] {
 	return mcpTools.map((t) => ({
 		name: t.name,
 		description: t.description ?? '',
-		parameters: sanitizeSchemaForGemini(
-		t.inputSchema as Record<string, unknown>,
-		) as unknown as FunctionDeclarationSchema,
+		parameters: t.inputSchema as Record<string, unknown>,
 	}));
 }
 
@@ -45,7 +26,10 @@ export interface AgentResult {
 }
 
 export interface AgentSession {
-	model: GenerativeModel;
+	ai: GoogleGenAI;
+	modelId: string;
+	geminiTools: Tool[];
+	systemInstruction?: string;
 	mcpClient: Client;
 	mcpTools: MCPTool[];
 	/** Accumulated conversation history — grows with every chat turn */
@@ -64,20 +48,21 @@ export function createAgentSession(
 	modelId: string,
 	systemPrompt?: string,
 ): AgentSession {
-	const genAI = new GoogleGenerativeAI(geminiApiKey);
+	const ai = new GoogleGenAI({ apiKey: geminiApiKey });
 	const geminiFunctions = mcpToolsToGeminiFunctions(mcpTools);
-
 	const geminiTools: Tool[] = geminiFunctions.length > 0
 		? [{ functionDeclarations: geminiFunctions }]
 		: [];
 
-	const model = genAI.getGenerativeModel({
-		model: modelId,
-		tools: geminiTools,
-		...(systemPrompt ? { systemInstruction: systemPrompt } : {}),
-	});
-
-	return { model, mcpClient, mcpTools, history: [] };
+	return {
+		ai,
+		modelId,
+		geminiTools,
+		systemInstruction: systemPrompt,
+		mcpClient,
+		mcpTools,
+		history: [],
+	};
 }
 
 /**
@@ -96,7 +81,7 @@ export async function runTurn(
 	session: AgentSession,
 	userMessage: string,
 ): Promise<AgentResult> {
-	const { model, mcpClient } = session;
+	const { ai, modelId, geminiTools, systemInstruction, mcpClient } = session;
 	const toolCalls: AgentResult['toolCalls'] = [];
 
 	session.history.push({ role: 'user', parts: [{ text: userMessage }] });
@@ -104,22 +89,30 @@ export async function runTurn(
 	for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
 		console.log(`\n[Agent] Iteration ${iteration + 1}/${MAX_ITERATIONS}`);
 
-		const response = await model.generateContent({ contents: session.history });
-		const candidate = response.response.candidates?.[0];
+		const response = await ai.models.generateContent({
+			model: modelId,
+			contents: session.history,
+			config: {
+				tools: geminiTools,
+				...(systemInstruction ? { systemInstruction } : {}),
+			},
+		});
+
+		const candidate = response.candidates?.[0];
 
 		if (!candidate) {
 			throw new Error('Gemini returned no candidates');
 		}
 
-		const modelContent: Content = { role: 'model', parts: candidate.content.parts };
+		const modelContent: Content = { role: 'model', parts: candidate.content?.parts ?? [] };
 		session.history.push(modelContent);
 
-		const functionCallParts = candidate.content.parts.filter(
+		const functionCallParts = (candidate.content?.parts ?? []).filter(
 			(p): p is { functionCall: FunctionCall } => 'functionCall' in p,
 		);
 
 		if (functionCallParts.length === 0) {
-			const text = candidate.content.parts
+			const text = (candidate.content?.parts ?? [])
 				.filter((p): p is { text: string } => 'text' in p)
 				.map((p) => p.text)
 				.join('');
@@ -131,6 +124,7 @@ export async function runTurn(
 
 		for (const part of functionCallParts) {
 			const { name, args } = part.functionCall;
+			if (!name) continue;
 			const toolArgs = (args ?? {}) as Record<string, unknown>;
 
 			console.log(`[Agent] → Calling MCP tool: ${name}`, toolArgs);
@@ -143,8 +137,8 @@ export async function runTurn(
 
 			functionResponseParts.push({
 				functionResponse: {
-				name,
-				response: { content: result },
+					name,
+					response: { content: result },
 				},
 			});
 		}
