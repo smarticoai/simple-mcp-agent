@@ -16,7 +16,7 @@ function requireEnv(name: string): string {
 
 async function main(): Promise<void> {
 	const geminiApiKey = requireEnv('GEMINI_API_KEY');
-	const geminiModel = process.env['GEMINI_MODEL'] ?? 'gemini-2.5-flash';
+	const geminiModel = process.env['GEMINI_MODEL'] ?? 'gemini-3.5-flash';
 	const mcpUrl = requireEnv('SMARTICO_MCP_URL');
 	const mcpToken = requireEnv('SMARTICO_MCP_TOKEN');
 
