@@ -38,7 +38,7 @@ async function main(): Promise<void> {
 	// Load TOON reference and system prompt directly from MCP resources.
 	const [toonReferenceResult, promptResult] = await Promise.all([
 		mcp.client.readResource({ uri: 'smartico://segment/toon-reference' }),
-		mcp.client.getPrompt({ name: 'segment_get_started' }),
+		mcp.client.getPrompt({ name: 'segment_get_started', arguments: {}}),
 	]);
 
 	
