@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import readline from 'readline/promises';
-import { connectMCPClient } from './mcp-client';
-import { createAgentSession, runTurn } from './agent';
+import { connectMCPClient } from './mcp-client.js';
+import { createAgentSession, runTurn } from './agent.js';
 
 function requireEnv(name: string): string {
 	const value = process.env[name];
@@ -16,7 +16,7 @@ function requireEnv(name: string): string {
 
 async function main(): Promise<void> {
 	const geminiApiKey = requireEnv('GEMINI_API_KEY');
-	const geminiModel = process.env['GEMINI_MODEL'] ?? 'gemini-3.5-flash';
+	const geminiModel = process.env['GEMINI_MODEL'] ?? 'gemini-3.7-flash';
 	const mcpUrl = requireEnv('SMARTICO_MCP_URL');
 	const mcpToken = requireEnv('SMARTICO_MCP_TOKEN');
 
@@ -37,8 +37,8 @@ async function main(): Promise<void> {
 
 	// Load TOON reference and system prompt directly from MCP resources.
 	const [toonReferenceResult, promptResult] = await Promise.all([
-		mcp.client.readResource({ uri: 'smartico://segment/toon-reference' }),
-		mcp.client.getPrompt({ name: 'segment_get_started', arguments: {}}),
+		mcp.client.readResource({ uri: 'smartico://segment/toon' }),
+		mcp.client.getPrompt({ name: 'segment', arguments: {}}),
 	]);
 
 	

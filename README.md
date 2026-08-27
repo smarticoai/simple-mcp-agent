@@ -4,7 +4,7 @@ NodeJS/TypeScript demo of an interactive AI Agent that communicates with the **S
 
 ## What it demonstrates
 
-- Connecting to an MCP server over **HTTP Streamable transport** with Bearer token auth
+- Connecting to an MCP server over **HTTP Streamable transport** with Bearer token auth, using the **MCP TypeScript SDK v2** (`@modelcontextprotocol/client`)
 - Listing MCP tools at runtime and converting them to Gemini **function declarations**
 - Using MCP **resources** (`readResource`) and **prompts** (`getPrompt`) from Node.js code to build rich system context
 - A **multi-turn chat loop** powered by `readline` — conversation history is preserved across turns so the model retains full context
@@ -18,9 +18,9 @@ index.ts (chat loop)
   ├─ connectMCPClient()  ──► Smartico BO MCP  HTTP /mcp
   │                               Bearer token auth
   │
-  ├─ readResource(toon-reference)    ─┐
-  ├─ getPrompt(segment_get_started)   ├─ Node.js protocol calls (not tools)
-  │                                  ─┘ → injected as systemInstruction
+  ├─ readResource(smartico://segment/toon) ─┐
+  ├─ getPrompt(segment)                     ├─ Node.js protocol calls (not tools)
+  │                                        ─┘ → injected as systemInstruction
   │
   └─ createAgentSession()  ──► Gemini model + tools + system prompt
        │
@@ -39,7 +39,7 @@ index.ts (chat loop)
 |---|---|
 | **MCP tools** | Surfaced to Gemini as `FunctionDeclaration[]`. Gemini calls them; results are fed back as `functionResponse` parts. |
 | **MCP resources** | Read in Node.js code at startup (`client.readResource()`). Content is injected into the Gemini `systemInstruction`. The model never calls resources directly — it has no mechanism to do so. |
-| **MCP prompts** | Same as resources — fetched in Node.js (`client.getPrompt()`), injected as system context. The `segment_get_started` prompt tells the model to call `read_resource` (a real MCP tool) to load workflow instructions on demand. |
+| **MCP prompts** | Same as resources — fetched in Node.js (`client.getPrompt()`), injected as system context. The `segment` prompt tells the model to call `entity_describe`, then `read_resource` (both real MCP tools), to load the field schema and workflow on demand. |
 | **`read_resource` tool** | A real MCP tool registered on the server that wraps `resources/read`. This bridges the gap — the model can call it to load a workflow resource by URI when needed. |
 | **Conversation history** | A single `Content[]` array grows with every turn. Each `runTurn()` call appends the user message, model response, and tool call/response pairs, giving Gemini full context. |
 
@@ -47,7 +47,7 @@ index.ts (chat loop)
 
 | Requirement | Notes |
 |---|---|
-| Node.js 18+ | Required for native `fetch` used by the MCP HTTP transport |
+| Node.js 20+ | Required for native `fetch` and the ESM-only `@google/genai` build |
 | `index-ai` running | Smartico BO MCP is served by `server/index-ai.ts` on port `1031` by default |
 | Gemini API key | Get one free at [aistudio.google.com](https://aistudio.google.com/apikey) |
 | MCP Bearer token | Obtain from the BO back-office (TokenType.MCP) |
@@ -78,7 +78,7 @@ Example session:
 
 ```
 You: create segment of users from Japan
-Agent: [calls list_entities → describe_entity(segment) → search_properties → get_properties_by_names → entity_create(entity_type=segment, dry_run=true)]
+Agent: [calls entity_types_list → entity_describe(segment) → read_resource(smartico://segment/toon) → entity_create(entity_type=segment, dry_run=true)]
        Here is the preview. Would you like to create it?
 
 You: yes
@@ -93,8 +93,8 @@ Type `quit` to exit.
 | Variable | Required | Description |
 |---|---|---|
 | `GEMINI_API_KEY` | Yes | Google AI Studio API key |
-| `GEMINI_MODEL` | No | Model ID (default: `gemini-2.5-flash`) |
-| `SMARTICO_MCP_URL` | Yes | MCP server URL (e.g. `http://localhost:1031/mcp`) |
+| `GEMINI_MODEL` | No | Model ID (default: `gemini-3.7-flash`) |
+| `SMARTICO_MCP_URL` | Yes | MCP server URL |
 | `SMARTICO_MCP_TOKEN` | Yes | Bearer token for MCP authentication |
 
 ## File structure
@@ -113,5 +113,5 @@ simple-mcp-agent/
 ```
 
 To expose resource content to the model, either:
-1. **Pre-load it** in setup code and inject into `systemInstruction` (used here for TOON reference + `segment_get_started`)
+1. **Pre-load it** in setup code and inject into `systemInstruction` (used here for the segment TOON resource + the `segment` prompt)
 2. **Wrap it as a tool** — the `read_resource` tool on the MCP server does exactly this, letting the model load workflow instructions on demand by URI

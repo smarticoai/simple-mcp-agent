@@ -1,6 +1,4 @@
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import { Client, StreamableHTTPClientTransport, type Tool } from '@modelcontextprotocol/client';
 
 export interface MCPConnection {
 	client: Client;

@@ -5,11 +5,10 @@ import {
 	FunctionDeclaration,
 	Tool,
 } from '@google/genai';
-import type { Tool as MCPTool } from '@modelcontextprotocol/sdk/types.js';
-import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { callMCPTool } from './mcp-client';
+import type { Client, Tool as MCPTool } from '@modelcontextprotocol/client';
+import { callMCPTool } from './mcp-client.js';
 
-const MAX_ITERATIONS = 10;
+const MAX_ITERATIONS = 100;
 
 function mcpToolsToGeminiFunctions(mcpTools: MCPTool[]): FunctionDeclaration[] {
 	return mcpTools.map((t) => ({
